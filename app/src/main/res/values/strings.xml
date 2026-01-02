@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">VoiceApiTest</string>
+    <string name="service_description">UiTreeDumpService</string>
+</resources>
