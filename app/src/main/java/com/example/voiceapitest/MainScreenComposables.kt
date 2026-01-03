@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -29,9 +28,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.example.voiceapitest.ui.theme.AppTheme
 
 data class MainScreenData(
     val buttonsEnabled: Boolean,
@@ -49,7 +51,8 @@ fun MainScreen(
     navController: NavHostController,
     onConnectChange: (Boolean) -> Unit,
     onSpeakChange: (Boolean) -> Unit,
-    onDumpClick: () -> Unit
+    onDumpClick: () -> Unit,
+    onNavGraphReady: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -137,14 +140,32 @@ fun MainScreen(
                     .background(Color.White)
                     .padding(10.dp)
             )
+            onNavGraphReady()
         }
     }
 }
 
 @Preview
 @Composable
-private fun MainScreenPreview() {
-    MaterialTheme {
+private fun MainWithHomeScreenPreview(
+    @PreviewParameter(SubScreenStateProvider::class) subScreen: Screen
+) {
+    MainScreenPreview(subScreen)
+}
+
+class SubScreenStateProvider : PreviewParameterProvider<Screen> {
+    override val values: Sequence<Screen> = sequenceOf(
+        Screen.Home,
+        Screen.Favorites,
+        Screen.Settings,
+        Screen.Music,
+    )
+}
+
+@Composable
+private fun MainScreenPreview(screen: Screen) {
+    AppTheme {
+        val navController: NavHostController = rememberNavController()
         MainScreen(
             data = MainScreenData(
                 buttonsEnabled = true,
@@ -154,10 +175,11 @@ private fun MainScreenPreview() {
                 lastTool = "navigate_to_screen",
                 transcript = "Transcript will appear here. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Last word."
             ),
-            navController = rememberNavController(),
+            navController = navController,
             onConnectChange = {},
             onSpeakChange = {},
             onDumpClick = {},
+            onNavGraphReady = { navController.navigate(screen) },
         )
     }
 }

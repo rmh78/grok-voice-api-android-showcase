@@ -12,7 +12,6 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
@@ -20,6 +19,7 @@ import androidx.core.graphics.createBitmap
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.example.voiceapitest.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
         collectUiTreeDump()
 
         setContent {
-            MaterialTheme {
+            AppTheme {
                 navController = rememberNavController()
                 val buttonsEnabled by buttonsEnabled.collectAsState()
                 val isConnected by voiceApiClient.isConnected.collectAsState()
