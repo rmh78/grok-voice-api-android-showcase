@@ -22,30 +22,46 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.LinkedList
+import java.util.Queue
 import java.util.concurrent.TimeUnit
 
 class VoiceApiClient(
     private val handleToolCall: (name: String, args: JSONObject, callId: String) -> Unit,
     private val lifecycleScope: LifecycleCoroutineScope
 ) {
+    private var playbackJob: Job? = null
+        set(value) {
+            field?.cancel()
+            field = value
+        }
+
     private var listeningJob: Job? = null
         set(value) {
             field?.cancel()
             field = value
         }
+
     private var webSocket: WebSocket? = null
+
     private var audioRecord: AudioRecord? = null
         set(value) {
             field?.stop()
             field?.release()
             field = value
         }
+
     private var audioTrack: AudioTrack? = null
         set(value) {
             field?.stop()
+            field?.flush()
             field?.release()
             field = value
         }
+
+    private var isPlayingAudio = false
+
+    private val audioQueue: Queue<ByteArray> = LinkedList()
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
@@ -64,7 +80,6 @@ class VoiceApiClient(
 
     fun connect() {
         Log.i(LOG_TAG, "connect")
-        startAudioComponents()
 
         val client = OkHttpClient.Builder()
             .webSocketCloseTimeout(60, TimeUnit.SECONDS)
@@ -80,38 +95,48 @@ class VoiceApiClient(
                 Log.i(LOG_TAG,"onOpen: $response")
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.i(LOG_TAG,"onMessage: $text")
-
                 val json = JSONObject(text)
                 val type = json.getString("type")
                 when (type) {
                     "conversation.created" -> {
-                        Log.i(LOG_TAG, "conversation created")
+                        Log.i(LOG_TAG, type)
                         configureSession(webSocket)
                     }
                     "session.created" -> {
-                        Log.i(LOG_TAG, "session created")
+                        Log.i(LOG_TAG, type)
                     }
                     "session.updated" -> {
-                        Log.i(LOG_TAG, "session updated")
+                        Log.i(LOG_TAG, type)
                         _isConnected.value = true
                     }
                     "input_audio_buffer.speech_started" -> {
-                        _status.value = "You are speaking ..."
+                        Log.i(LOG_TAG, type)
+                        stopAudioPlayback()
+                        clearAudioQueue()
+                        _status.value = "You are speaking"
+                    }
+                    "input_audio_buffer.speech_stopped" -> {
+                        Log.i(LOG_TAG, type)
+                        _status.value = "You stopped speaking"
                     }
                     "conversation.item.created" -> {
-                        _status.value = "Voice assistant is answering ..."
+                        Log.i(LOG_TAG, "$type: $json")
+                        _status.value = "Voice assistant is answering"
                     }
                     "response.audio.delta" -> {
                         val delta = json.getString("delta")
                         val bytes = Base64.decode(delta, Base64.NO_WRAP)
-                        audioTrack?.write(bytes, 0, bytes.size)
+                        synchronized(audioQueue) {
+                            audioQueue.add(bytes)
+                        }
+                        processAudioQueue()
                     }
                     "response.audio_transcript.delta" -> {
                         val delta = json.getString("delta")
                         _transcript.value += delta
                     }
                     "response.function_call_arguments.done" -> {
+                        Log.i(LOG_TAG, type)
                         val name = json.getString("name")
                         _lastTool.value = name
                         val arguments = JSONObject(json.getString("arguments"))
@@ -119,10 +144,10 @@ class VoiceApiClient(
                         handleToolCall(name, arguments, callId)
                     }
                     "response.audio.done" -> {
-                        Log.i(LOG_TAG, "response audio done")
+                        Log.i(LOG_TAG, type)
                     }
                     "response.done" -> {
-                        Log.i(LOG_TAG, "response done")
+                        Log.i(LOG_TAG, type)
                         stopSpeak()
                     }
                     else -> Unit
@@ -156,7 +181,8 @@ class VoiceApiClient(
 
     fun disconnect() {
         Log.i(LOG_TAG, "disconnect")
-        stopAudioComponents()
+        stopListening()
+        stopAudioPlayback()
         webSocket?.close(1000, "Voice Agent deactivated")
         webSocket = null
         _isConnected.value = false
@@ -203,6 +229,18 @@ class VoiceApiClient(
                     "type": "function",
                     "name": "analyze_ui_with_ui_tree",
                     "description": "Analyze the app ui-tree and describe its content elements."
+                },
+                {
+                    "type": "function",
+                    "name": "goto_item",
+                    "description": "Goto/select/scroll to an item in the list.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "index": {"type": "number"}
+                        },
+                        "required": ["index"]
+                    }
                 }
             ]
         """.trimIndent())
@@ -244,57 +282,87 @@ class VoiceApiClient(
         ws.send(sessionUpdate.toString())
     }
 
-    private fun startAudioComponents() {
-        Log.i(LOG_TAG, "start audio components")
-        audioTrack = AudioTrack.Builder()
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build()
-            )
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            )
-            .setBufferSizeInBytes(BUFFER_SIZE)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
-            .apply { play() }
+    private fun stopAudioPlayback() {
+        if (audioTrack != null && isPlayingAudio) {
+            audioTrack = null
+            isPlayingAudio = false
+            Log.i(LOG_TAG, "audio playback stopped")
+        }
     }
 
-    private fun stopAudioComponents() {
-        Log.i(LOG_TAG, "stop audio components")
-        audioTrack = null
+    private fun clearAudioQueue() {
+        synchronized(audioQueue) {
+            audioQueue.clear()
+        }
+        Log.d(LOG_TAG, "audio queue cleared")
+    }
+
+    private fun processAudioQueue() {
+        if (!isPlayingAudio) {
+            playbackJob = lifecycleScope.launch(Dispatchers.IO) {
+                while (audioQueue.isNotEmpty()) {
+                    isPlayingAudio = true
+                    val audioData = synchronized(audioQueue) {
+                        audioQueue.poll()
+                    }
+                    if (audioData != null) {
+                        playAudio(audioData)
+                    }
+                }
+                isPlayingAudio = false
+            }
+        }
+    }
+
+    private fun playAudio(audioData: ByteArray) {
+        if (audioTrack == null) {
+            audioTrack = AudioTrack.Builder()
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setBufferSizeInBytes(BUFFER_SIZE)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+                .apply { play() }
+            Log.d(LOG_TAG, "audio track initialized and started")
+        }
+        audioTrack?.write(audioData, 0, audioData.size)
     }
 
     @SuppressLint("MissingPermission")
     private fun startListening() {
-        Log.i(LOG_TAG, "start listening")
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            SAMPLE_RATE,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            BUFFER_SIZE
-        ).apply { startRecording() }
+        try {
+            Log.i(LOG_TAG, "start listening")
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                BUFFER_SIZE
+            ).apply { startRecording() }
 
-        listeningJob = lifecycleScope.launch(Dispatchers.IO) {
-            val buffer = ByteArray(BUFFER_SIZE)
-            while (this.isActive) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                if (read > 0) {
-                    val base64Audio = Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP)
-                    val inputAudio = JSONObject().apply {
-                        put("type", "input_audio_buffer.append")
-                        put("audio", base64Audio)
+            listeningJob = lifecycleScope.launch(Dispatchers.IO) {
+                val buffer = ByteArray(BUFFER_SIZE)
+                while (this.isActive) {
+                    val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                    if (read > 0) {
+                        val base64Audio = Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP)
+                        webSocket?.send("""{"type":"input_audio_buffer.append","audio":"$base64Audio"}""")
                     }
-                    webSocket?.send(inputAudio.toString())
                 }
             }
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "error listening", e)
         }
     }
 
@@ -306,6 +374,7 @@ class VoiceApiClient(
 
     companion object {
         private const val LOG_TAG = "VoiceApiClient"
+
         private const val SAMPLE_RATE = 24000
 
         private val BUFFER_SIZE =
@@ -313,6 +382,6 @@ class VoiceApiClient(
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
-            )
+            ) * 10
     }
 }

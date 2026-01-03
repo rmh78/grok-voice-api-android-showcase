@@ -1,5 +1,8 @@
 package com.example.voiceapitest
 
+import android.annotation.SuppressLint
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -10,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
@@ -22,6 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -31,9 +40,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.example.voiceapitest.ui.theme.AppTheme
+import kotlinx.coroutines.launch
 
 data class MainScreenData(
     val buttonsEnabled: Boolean,
@@ -143,6 +155,92 @@ fun MainScreen(
             onNavGraphReady()
         }
     }
+}
+
+@Composable
+fun HomeScreen() {
+    Column {
+        Text("Home Screen", fontSize = 30.sp)
+        Box(modifier = Modifier
+            .size(100.dp)
+            .background(Color.Red)
+            .padding(10.dp)
+            .semantics { contentDescription = "red box" }
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(modifier = Modifier
+            .size(200.dp)
+            .background(Color.Blue)
+            .padding(10.dp)
+            .semantics { contentDescription = "blue box" }
+        )
+    }
+}
+
+@SuppressLint("ViewModelConstructorInComposable")
+@Composable
+fun FavoritesScreen(
+) {
+    // Get activity scoped view-model
+    val viewModel: ExpandableListViewModel =
+        (LocalActivity.current as? ComponentActivity)?.let {
+            viewModel(viewModelStoreOwner = it)
+        } ?: viewModel()
+
+    val expandedIndex by viewModel.expandedIndex.collectAsState()
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    val items = remember {
+        List(20) { i ->
+            Item(i + 1, "Item ${i + 1}", "Description for item ${i + 1}...")
+        }
+    }
+
+    // Collect scroll commands (one-time consumption)
+    LaunchedEffect(Unit) {
+        viewModel.scrollCommands.collect { targetIndex ->
+            coroutineScope.launch {
+                listState.animateScrollToItem(
+                    index = targetIndex,
+                    scrollOffset = -150
+                )
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        ExpandableItemList(
+            items = items,
+            expandedIndex = expandedIndex,
+            onExpandedChange = { newIndex ->
+                if (newIndex != null) {
+                    viewModel.scrollToAndExpand(newIndex)
+                } else {
+                    viewModel.setExpandedIndex(null)
+                }
+            },
+            listState = listState
+        )
+    }
+}
+
+@Composable
+fun SettingsScreen() {
+    Column {
+        Text("Settings Screen", fontSize = 30.sp)
+        Box(modifier = Modifier
+            .size(150.dp)
+            .background(Color.Green)
+            .padding(10.dp)
+            .semantics { contentDescription = "green box" }
+        )
+    }
+}
+
+@Composable
+fun MusicScreen() {
+    Text("Music Screen", fontSize = 30.sp)
 }
 
 @Preview

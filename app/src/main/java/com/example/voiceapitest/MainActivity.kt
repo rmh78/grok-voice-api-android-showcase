@@ -12,6 +12,7 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
@@ -42,6 +43,8 @@ class MainActivity : ComponentActivity() {
 
     private val _buttonsEnabled = MutableStateFlow(false)
     private val buttonsEnabled: StateFlow<Boolean> = _buttonsEnabled
+
+    private val expandableListViewModel: ExpandableListViewModel by viewModels()
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -198,6 +201,11 @@ class MainActivity : ComponentActivity() {
                     "screen: $destination could not be found."
                 }
                 voiceApiClient.sendToolCallResponse(response, callId)
+            }
+            "goto_item" -> {
+                val index = args.getInt("index") - 1
+                expandableListViewModel.scrollToAndExpand(index)
+                voiceApiClient.sendToolCallResponse("scrolled to item with index: $index", callId)
             }
         }
     }
