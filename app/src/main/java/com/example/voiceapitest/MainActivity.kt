@@ -32,10 +32,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
-    private val voiceApiClient = VoiceApiClient(
-        ::handleToolCall,
-        lifecycleScope
-    )
+    private val voiceApiClient = VoiceApiClient(::handleToolCall)
 
     private val visionApiClient = VisionApiClient()
 
@@ -70,6 +67,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 navController = rememberNavController()
+                val audioLevel by voiceApiClient.audioLevel.collectAsState()
                 val buttonsEnabled by buttonsEnabled.collectAsState()
                 val isConnected by voiceApiClient.isConnected.collectAsState()
                 val isSpeakActive by voiceApiClient.isSpeakActive.collectAsState()
@@ -79,6 +77,7 @@ class MainActivity : ComponentActivity() {
 
                 MainScreen(
                     data = MainScreenData(
+                        audioLevel = audioLevel,
                         buttonsEnabled = buttonsEnabled,
                         isConnected = isConnected,
                         isSpeakActive = isSpeakActive,
@@ -203,9 +202,12 @@ class MainActivity : ComponentActivity() {
                 voiceApiClient.sendToolCallResponse(response, callId)
             }
             "goto_item" -> {
-                val index = args.getInt("index") - 1
-                expandableListViewModel.scrollToAndExpand(index)
-                voiceApiClient.sendToolCallResponse("scrolled to item with index: $index", callId)
+                var index = args.getInt("index")
+                if (index in 1..20) {
+                    index -= 1
+                    expandableListViewModel.scrollToAndExpand(index)
+                    voiceApiClient.sendToolCallResponse("scrolled to item with index: $index", callId)
+                }
             }
         }
     }

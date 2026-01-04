@@ -48,6 +48,7 @@ import com.example.voiceapitest.ui.theme.AppTheme
 import kotlinx.coroutines.launch
 
 data class MainScreenData(
+    val audioLevel: Float,
     val buttonsEnabled: Boolean,
     val isConnected: Boolean,
     val isSpeakActive: Boolean,
@@ -122,6 +123,16 @@ fun MainScreen(
                 Row {
                     Text("Status: ", fontWeight = FontWeight.Bold)
                     Text(data.status)
+                }
+                Row {
+                    Text("Audio Level: ", fontWeight = FontWeight.Bold)
+                    Box(
+                        modifier = Modifier
+                            .padding(5.dp)
+                            .width((200 * data.audioLevel).dp)
+                            .height(10.dp)
+                            .background(Color.Blue)
+                    )
                 }
                 Row {
                     Text("Last tool: ", fontWeight = FontWeight.Bold)
@@ -266,10 +277,11 @@ private fun MainScreenPreview(screen: Screen) {
         val navController: NavHostController = rememberNavController()
         MainScreen(
             data = MainScreenData(
+                audioLevel = 0.5f,
                 buttonsEnabled = true,
                 isConnected = false,
                 isSpeakActive = false,
-                status = "Status: Connected",
+                status = "Connected",
                 lastTool = "navigate_to_screen",
                 transcript = "Transcript will appear here. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Last word."
             ),
