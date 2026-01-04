@@ -20,7 +20,10 @@ The app uses **custom tools configuration** to let the voice model call Android 
 
 ## Demo Video
 
-https://github.com/user-attachments/assets/2b04e8b2-741a-4d42-92be-8fd016355cdc
+| Demo1 | Demo2 |
+|-|-|
+| https://github.com/user-attachments/assets/2b04e8b2-741a-4d42-92be-8fd016355cdc | https://github.com/user-attachments/assets/0b63de3d-aa86-498b-8cd5-dd6bca516b18 |
+
 
 ## App Screenshots
 
