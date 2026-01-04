@@ -6,11 +6,25 @@ speech-to-text lib is needed, as the Grok Voice Agent API uses base64 encoded vo
 
 ## Use cases
 
-The app uses **custom tools configuration** to let the voice model call Android functions for two use-cases:
+The app uses **custom tools configuration** to let the voice model call Android functions for some use-cases:
 
 - Use voice command for navigation between the different app screens (NavGraph).
   ```
+  Navigate to the "home" screen.
+  ```
+  ```
+  Navigate to the "favorites" screen.
+  ```
+  ```
   Navigate to the "settings" screen.
+  ```
+  ```
+  Navigate to the "music" screen.
+  ```
+
+- Use voice command to scroll to an item inside the list (favorites screen).
+  ```
+  Goto item 5.
   ```
   
 - Use voice command to analyze the content of the current screen.
