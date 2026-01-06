@@ -52,3 +52,11 @@ https://github.com/user-attachments/assets/0b63de3d-aa86-498b-8cd5-dd6bca516b18
 3. Start Android Emulator with enabled microphone and install the app.
 4. Toggle "Connect" button to start the Grok Voice Agent session.
 5. Toggle "Speak" button and start speaking.
+
+The accessibility service `UiTreeDumpService` can also be enabled using adb commands.
+
+```
+adb shell settings put secure enabled_accessibility_services com.example.voiceapitest/.UiTreeDumpService
+adb shell settings put secure accessibility_enabled 1
+```
+
